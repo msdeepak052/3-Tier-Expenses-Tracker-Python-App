@@ -322,3 +322,156 @@ You'll need these essential manifests:
   - Port 8000 is the backend service port
 - Backend accesses RDS via the full RDS endpoint URL from the secret
 
+
+The error indicates your backend application is failing because it can't connect to the PostgreSQL database. The key error is:
+
+```
+sqlalchemy.exc.ArgumentError: Expected string or URL object, got None
+```
+
+This means the `DATABASE_URL` environment variable is not set in your Kubernetes pod. Let's fix this:
+
+### Solution: Properly Configure the Backend Deployment
+
+1. **First, check your existing database service**:
+```bash
+kubectl get svc expense-db
+```
+(If you don't see it, you'll need to deploy PostgreSQL first)
+
+2. **Create a Kubernetes Secret for database credentials**:
+```bash
+kubectl create secret generic db-credentials \
+  --from-literal=POSTGRES_USER=user \
+  --from-literal=POSTGRES_PASSWORD=pass \
+  --from-literal=POSTGRES_DB=expenses_db
+```
+
+3. **Create a proper deployment YAML** (`backend-deployment.yaml`):
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: your-backend-image
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://user:pass@expense-db:5432/expenses_db"
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: expense-db
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+```
+
+4. **Apply the configuration**:
+```bash
+kubectl apply -f backend-deployment.yaml
+```
+
+### If You Need to Deploy PostgreSQL First:
+
+1. **Create PostgreSQL deployment** (`postgres-deployment.yaml`):
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13-alpine
+        envFrom:
+        - secretRef:
+            name: db-credentials
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+```
+
+2. **Create Persistent Volume Claim** (`postgres-pvc.yaml`):
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+3. **Apply all configurations**:
+```bash
+kubectl apply -f postgres-pvc.yaml
+kubectl apply -f postgres-deployment.yaml
+kubectl apply -f backend-deployment.yaml
+```
+
+### Verify Everything Works:
+
+1. Check pods:
+```bash
+kubectl get pods
+```
+
+2. Check backend logs:
+```bash
+kubectl logs <backend-pod-name>
+```
+
+3. Access your application:
+```bash
+kubectl port-forward svc/backend 8000:8000
+```
+Then visit http://localhost:8000
+
+### Key Points:
+1. The database URL must be accessible from the backend pod
+2. All environment variables must be properly set
+3. The database service must be running before the backend starts
+4. Use `kubectl describe pod <pod-name>` to debug startup issues
+
+Would you like me to:
+1. Show how to add liveness/readiness probes?
+2. Add configuration for the frontend service?
+3. Set up database backups?
+
