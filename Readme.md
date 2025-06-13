@@ -62,7 +62,8 @@ docker push devopsdktraining/expense-tracker-app-frontend:1
 
 #### Frontend & BAckend Image
 
-![image](https://github.com/user-attachments/assets/3492b213-5694-4789-a1f3-e8a728930d8c)
+![image](https://github.com/user-attachments/assets/5f2912ca-50e1-443b-af80-eab32ab81573)
+
 
 
 ---
@@ -192,8 +193,13 @@ docker exec -it expense-db psql -U user -d expenses_db -c "SELECT * FROM expense
 - Backend: [http://localhost:8000/expenses/](http://localhost:8000/expenses/)
 - Frontend: [http://localhost:5000](http://localhost:5000)
 
-![image](https://github.com/user-attachments/assets/0a4fd663-8fc2-4c88-8361-7fa538bc76fd)
-![image](https://github.com/user-attachments/assets/cc7146d2-5f4b-445a-b646-1ef9e5d732f4)
+![image](https://github.com/user-attachments/assets/468ae542-ac5e-4b5b-8d36-ba2cdc16c2c3)
+
+#### Deleting the Transport entry
+![image](https://github.com/user-attachments/assets/11fd3bea-91d2-46a5-8015-b9b7d8a43c53)
+
+![image](https://github.com/user-attachments/assets/2bca1fcb-7f03-4cd7-bf73-af9877839fde)
+
 
 
 ---
