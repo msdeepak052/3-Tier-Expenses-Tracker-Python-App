@@ -1,0 +1,92 @@
+From root folder (expenses-tracker)
+
+docker build -t expense-frontend ./frontend
+
+docker build -t expense-backend ./backend
+
+# Create a docker network for the containers to communicate
+docker network create expense-tracker-net
+
+# PostgreSQL with volume
+docker run -d \
+  --name expense-db \
+  --network expense-tracker-net \
+  --restart unless-stopped \
+  -e POSTGRES_USER=user \
+  -e POSTGRES_PASSWORD=pass \
+  -e POSTGRES_DB=expenses_db \
+  -e PGDATA=/var/lib/postgresql/data/pgdata \
+  -v pgdata:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:13-alpine \
+  -c shared_buffers=256MB \
+  -c max_connections=200
+
+docker exec -it expense-db psql -U user -d expenses_db -c "INSERT INTO expenses (category, amount) VALUES ('Manual', 100.00); SELECT * FROM expenses;"
+
+# Wait 20 seconds for DB initialization
+sleep 20
+
+# Backend with healthcheck
+docker run -d \
+  --name backend \
+  --network expense-tracker-net \
+  --restart unless-stopped \
+  -e DATABASE_URL=postgresql://user:pass@expense-db:5432/expenses_db \
+  -p 8000:8000 \
+  devopsdktraining/expense-tracker-app-backend:2
+  
+  
+# Recreate the tables by forcing initialization
+docker exec -it backend python -c "
+import time
+from app.database import engine
+from app.models import Base
+from sqlalchemy import exc
+
+# Wait for database to be ready
+for _ in range(10):
+    try:
+        engine.connect()
+        break
+    except exc.OperationalError:
+        print('Waiting for database...')
+        time.sleep(2)
+else:
+    raise RuntimeError('Could not connect to database')
+
+# Recreate tables
+Base.metadata.drop_all(bind=engine)
+Base.metadata.create_all(bind=engine)
+print('Tables initialized successfully')
+"
+
+# Frontend service (Flask)
+docker run -d \
+  --name frontend \
+  --network expense-tracker-net \
+  --restart unless-stopped \
+  -e API_URL=http://backend:8000 \
+  -p 5000:5000 \
+  devopsdktraining/expense-tracker-app-frontend:1
+
+  
+  
+ Connect to your PostgreSQL container
+docker exec -it expense-db psql -U user -d expenses_db
+
+# Inside psql, check if the table exists
+\dt
+# Should show: "expenses" table
+
+# Check for any data
+SELECT * FROM expenses;
+# If empty, this confirms no records exist yet
+\q
+
+docker exec -it expense-db psql -U user -d expenses_db -c "SELECT * FROM expenses;"
+
+  http://localhost:8000/expenses/  ---- backend
+  http://localhost:5000            ---- frontend
+  
+

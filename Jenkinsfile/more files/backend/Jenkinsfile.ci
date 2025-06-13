@@ -1,0 +1,72 @@
+
+pipeline {
+    agent any
+    environment {
+        IMAGE_NAME = "your-aws-account-id.dkr.ecr.ap-south-1.amazonaws.com/backend-app"
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/your-org/3-tier-python-app.git'
+            }
+        }
+        stage('Lint & Test') {
+            steps {
+                dir('backend') {
+                    sh 'pip install -r requirements.txt'
+                    sh 'pytest tests/'
+                }
+            }
+        }
+        stage('OWASP Dependency Check') {
+            steps {
+                sh 'dependency-check --project backend-app --scan backend/'
+            }
+        }
+        stage('Trivy Scan') {
+            steps {
+                sh "trivy fs --exit-code 0 --severity HIGH,CRITICAL backend/"
+            }
+        }
+        stage('SonarQube Analysis') {
+            environment {
+                SONARQUBE_SCANNER_HOME = tool 'SonarQubeScanner'
+            }
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'sonar-scanner -Dsonar.projectKey=backend-app -Dsonar.sources=backend'
+                }
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                dir('backend') {
+                    sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
+                }
+            }
+        }
+        stage('Push to Nexus') {
+            steps {
+                echo 'Uploading artifacts to Nexus (if any)'
+                // Add Nexus artifact upload logic here if needed
+            }
+        }
+        stage('Push to ECR') {
+            steps {
+                withAWS(region:'ap-south-1', credentials:'aws-jenkins') {
+                    sh '''
+                        aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${IMAGE_NAME}
+                        docker push ${IMAGE_NAME}:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+    }
+    post {
+        success {
+            build job: '../backend-cd-pipeline', parameters: [
+                string(name: 'IMAGE_TAG', value: "${BUILD_NUMBER}")
+            ]
+        }
+    }
+}

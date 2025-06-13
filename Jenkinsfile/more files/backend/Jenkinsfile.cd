@@ -1,0 +1,26 @@
+
+pipeline {
+    agent any
+    parameters {
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Tag of the backend image')
+    }
+    stages {
+        stage('Update K8s Manifest') {
+            steps {
+                dir('manifests') {
+                    sh "sed -i 's|image: .*|image: your-ecr-url/backend-app:${IMAGE_TAG}|' backend-deployment.yaml"
+                    sh 'git config user.email "jenkins@ci.com"'
+                    sh 'git config user.name "Jenkins CI"'
+                    sh 'git commit -am "Update backend image tag to ${IMAGE_TAG}"'
+                    sh 'git push origin main'
+                }
+            }
+        }
+        stage('ArgoCD Sync') {
+            steps {
+                sh 'argocd app sync backend-app'
+                sh 'argocd app wait backend-app --health --timeout 300'
+            }
+        }
+    }
+}

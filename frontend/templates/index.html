@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Expense Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            color: #343a40;
+        }
+        .header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            border: none;
+        }
+        .card-header {
+            background-color: #2575fc;
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+        }
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .expense-item:hover {
+            background-color: #f8f9fa;
+        }
+        .expense-date {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .total-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .server-info {
+            background-color: #e9ecef;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            font-family: monospace;
+        }
+        .category-badge {
+            background-color: #6a11cb;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-size: 0.8rem;
+        }
+        .amount-badge {
+            background-color: #28a745;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #bb2d3b;
+            border-color: #b02a37;
+        }
+        .expense-details {
+            flex-grow: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1 class="display-4">Expense Tracker</h1>
+            <p class="lead">Track your expenses easily</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Server Info -->
+        <div class="server-info">
+            <strong>Server:</strong> {{ server_info.hostname }} ({{ server_info.ip_address }})
+        </div>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Add Expense Form -->
+        <div class="card">
+            <div class="card-header">
+                Add New Expense
+            </div>
+            <div class="card-body">
+                <form method="post" class="row g-3">
+                    <div class="col-md-5">
+                        <input name="category" placeholder="Category (e.g. Food, Transport)" class="form-control" required>
+                    </div>
+                    <div class="col-md-5">
+                        <input name="amount" type="number" step="0.01" min="0.01" placeholder="Amount" class="form-control" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">Add Expense</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Expenses Summary -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Expenses Summary</span>
+                <span class="total-display">Total: ${{ "%.2f"|format(total) }}</span>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for e in expenses %}
+                    <li class="list-group-item">
+                        <div class="expense-item">
+                            <div class="expense-details">
+                                <span class="category-badge">{{ e.category }}</span>
+                                <span class="amount-badge ms-2">${{ "%.2f"|format(e.amount) }}</span>
+                                {% if e.formatted_date %}
+                                <div class="expense-date mt-1">{{ e.formatted_date }}</div>
+                                {% endif %}
+                            </div>
+                            <form method="post" action="{{ url_for('delete_expense', expense_id=e.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this expense?')">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-center text-muted py-4">
+                        No expenses recorded yet. Add your first expense above!
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS for alert dismissal -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
