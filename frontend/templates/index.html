@@ -47,12 +47,17 @@
             font-weight: bold;
             color: #28a745;
         }
-        .server-info {
+<!--         .server-info {
             background-color: #e9ecef;
             padding: 1rem;
             border-radius: 5px;
             margin-bottom: 1rem;
             font-family: monospace;
+        } -->
+        .server-info div {
+            margin-bottom: 0.3rem;
+            font-family: monospace;
+            font-size: 0.9rem;
         }
         .category-badge {
             background-color: #6a11cb;
@@ -83,16 +88,17 @@
 <body>
     <div class="header">
         <div class="container">
-            <h1 class="display-4">Expense Tracker</h1>
+            <h1 class="display-4">Expense Tracker App - Deepak</h1>
             <p class="lead">Track your expenses easily</p>
         </div>
     </div>
 
     <div class="container">
-        <!-- Server Info -->
-        <div class="server-info">
-            <strong>Server:</strong> {{ server_info.hostname }} ({{ server_info.ip_address }})
-        </div>
+    <!-- Server Info -->
+    <div class="server-info">
+        <div><strong>Container:</strong> {{ server_info.container.hostname }} ({{ server_info.container.ip }})</div>
+        <div><strong>Infrastructure Host:</strong> {{ server_info.infra_host.hostname }} ({{ server_info.infra_host.ip }})</div>
+    </div>
 
         <!-- Flash messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -163,5 +169,12 @@
     
     <!-- Bootstrap JS for alert dismissal -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+       <!-- Add this footer section -->
+    <footer class="mt-5 py-3 text-center text-muted">
+        <div class="container">
+            © 2025, Devops with Deepak - Copyright
+        </div>
+    </footer>
 </body>
 </html>
