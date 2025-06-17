@@ -203,6 +203,105 @@ docker exec -it expense-db psql -U user -d expenses_db -c "SELECT * FROM expense
 ![image](https://github.com/user-attachments/assets/32fae2d5-d318-4f5e-a020-267d3e2a7345)
 
 
+Yes, the server name (`d78e390cba08`) and IP (`172.19.0.4`) you're seeing are **Docker container details**, not your local machine's hostname or IP. This is expected behavior when running inside Docker.
+
+### Why You See Docker Container Details:
+1. **`hostname`** inside a Docker container returns the container ID (like `d78e390cba08`).
+2. **`socket.gethostbyname()`** returns the container's internal Docker network IP (`172.19.0.4`), not your machine's LAN/WAN IP.
+
+---
+
+### How to Validate if This is a Docker IP:
+Run these commands to check:
+
+#### 1. **List all Docker networks and containers:**
+```bash
+docker network inspect expense-tracker-net
+```
+This will show all containers (`frontend`, `backend`, `expense-db`) and their assigned IPs (like `172.19.0.4`).
+
+#### 2. **Check your container's IP directly:**
+```bash
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' frontend
+```
+This should return `172.19.0.4` (or similar).
+
+#### 3. **Ping the IP from your host machine:**
+```bash
+ping 172.19.0.4
+```
+If it responds, it confirms the IP belongs to a Docker container.
+
+---
+
+### If You Want to Show Your Local Machine's IP Instead:
+Modify `get_server_info()` in `frontend/app.py` to use your host IP:
+
+#### Option 1: Get LAN IP (Recommended)
+```python
+def get_server_info():
+    hostname = socket.gethostname()
+    # Get LAN IP (works on Linux/macOS/Windows)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Doesn't need to be reachable
+        s.connect(('10.255.255.255', 1))
+        ip_address = s.getsockname()[0]
+    except Exception:
+        ip_address = socket.gethostbyname(hostname)
+    finally:
+        s.close()
+    return {
+        'hostname': hostname,
+        'ip_address': ip_address
+    }
+```
+
+#### Option 2: Get Public IP (Requires Internet)
+```python
+def get_server_info():
+    hostname = socket.gethostname()
+    try:
+        ip_address = requests.get('https://api.ipify.org').text
+    except:
+        ip_address = "Not available"
+    return {
+        'hostname': hostname,
+        'ip_address': ip_address
+    }
+```
+
+#### Option 3: Show Both Docker and Host IPs
+```python
+def get_server_info():
+    docker_hostname = socket.gethostname()
+    docker_ip = socket.gethostbyname(docker_hostname)
+    
+    # Get host machine LAN IP
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        host_ip = s.getsockname()[0]
+    except Exception:
+        host_ip = "Not available"
+    finally:
+        s.close()
+    
+    return {
+        'docker_hostname': docker_hostname,
+        'docker_ip': docker_ip,
+        'host_ip': host_ip
+    }
+```
+Then update the template to show both:
+```html
+<div class="server-info">
+    <strong>Container:</strong> {{ server_info.docker_hostname }} ({{ server_info.docker_ip }})<br>
+    <strong>Host Machine:</strong> {{ server_info.host_ip }}
+</div>
+```
+
+---
 
 
 ---
