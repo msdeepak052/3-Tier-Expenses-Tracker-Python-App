@@ -8,15 +8,44 @@ app.secret_key = 'your_secret_key_here'
 
 API_URL = "http://backend:8000"
 
-def get_server_info():
-    """Get hostname and IP address of the server"""
-    hostname = socket.gethostname()
-    ip_address = socket.gethostbyname(hostname)
-    return {
-        'hostname': hostname,
-        'ip_address': ip_address
-    }
+import socket
+import os
 
+def get_server_info():
+    """Get container and host info (works for Docker/Kubernetes)"""
+    # Container info (always available)
+    container_hostname = socket.gethostname()
+    container_ip = socket.gethostbyname(container_hostname)
+    
+    # Host machine info (cross-platform method)
+    host_hostname = "N/A"
+    host_ip = "N/A"
+    
+    try:
+        # Method 1: Use Docker's host.docker.internal (macOS/Windows)
+        try:
+            host_ip = socket.gethostbyname("host.docker.internal")
+            host_hostname = "host.docker.internal"
+        except socket.gaierror:
+            # Method 2: Use default gateway (Linux)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 53))  # Google DNS
+                host_ip = s.getsockname()[0]  # Gets host's LAN IP
+                host_hostname = socket.gethostbyaddr(host_ip)[0]  # Gets hostname
+    except Exception:
+        pass  # Fallback to N/A if detection fails
+    
+    return {
+        'container': {
+            'hostname': container_hostname,
+            'ip': container_ip
+        },
+        'infra_host': {
+            'hostname': host_hostname,
+            'ip': host_ip
+        }
+    }
+    
 def format_expense_date(expense):
     """Format the datetime string for display"""
     if 'created_at' in expense:
