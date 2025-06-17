@@ -193,12 +193,15 @@ docker exec -it expense-db psql -U user -d expenses_db -c "SELECT * FROM expense
 - Backend: [http://localhost:8000/expenses/](http://localhost:8000/expenses/)
 - Frontend: [http://localhost:5000](http://localhost:5000)
 
-![image](https://github.com/user-attachments/assets/468ae542-ac5e-4b5b-8d36-ba2cdc16c2c3)
+![image](https://github.com/user-attachments/assets/d21cdd03-f9f6-414d-9bb3-b55983a7e809)
+
 
 #### Deleting the Transport entry
-![image](https://github.com/user-attachments/assets/11fd3bea-91d2-46a5-8015-b9b7d8a43c53)
 
-![image](https://github.com/user-attachments/assets/2bca1fcb-7f03-4cd7-bf73-af9877839fde)
+![image](https://github.com/user-attachments/assets/27ae22f8-93ef-43f9-b277-a37c7b0d4f9b)
+
+![image](https://github.com/user-attachments/assets/32fae2d5-d318-4f5e-a020-267d3e2a7345)
+
 
 
 
