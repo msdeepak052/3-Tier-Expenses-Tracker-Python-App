@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+spec:
+  template:
+    spec:
+      containers:
+      - name: db-init
+        image: devopsdktraining/expense-tracker-app-backend:2
+        command: ["/bin/sh", "-c"]
+        args:
+          - >
+            sleep 20;
+            python -c "
+            import time
+            from app.database import engine
+            from app.models import Base
+            from sqlalchemy import exc
+
+            for _ in range(10):
+                try:
+                    engine.connect()
+                    break
+                except exc.OperationalError:
+                    print('Waiting for database...')
+                    time.sleep(2)
+            else:
+                raise RuntimeError('Could not connect to database')
+
+            Base.metadata.drop_all(bind=engine)
+            Base.metadata.create_all(bind=engine)
+            print('Tables initialized successfully')
+            "
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://user:pass@expense-tracker-db.xxxxxxxxxxxx.us-east-1.rds.amazonaws.com:5432/expenses_db"
+      restartPolicy: Never
+  backoffLimit: 2
