@@ -62,7 +62,8 @@ docker push devopsdktraining/expense-tracker-app-frontend:2
 
 #### Frontend & BAckend Image
 
-![image](https://github.com/user-attachments/assets/3492b213-5694-4789-a1f3-e8a728930d8c)
+![image](https://github.com/user-attachments/assets/5f2912ca-50e1-443b-af80-eab32ab81573)
+
 
 
 ---
@@ -192,8 +193,115 @@ docker exec -it expense-db psql -U user -d expenses_db -c "SELECT * FROM expense
 - Backend: [http://localhost:8000/expenses/](http://localhost:8000/expenses/)
 - Frontend: [http://localhost:5000](http://localhost:5000)
 
-![image](https://github.com/user-attachments/assets/0a4fd663-8fc2-4c88-8361-7fa538bc76fd)
-![image](https://github.com/user-attachments/assets/cc7146d2-5f4b-445a-b646-1ef9e5d732f4)
+![image](https://github.com/user-attachments/assets/d21cdd03-f9f6-414d-9bb3-b55983a7e809)
+
+
+#### Deleting the Transport entry
+
+![image](https://github.com/user-attachments/assets/27ae22f8-93ef-43f9-b277-a37c7b0d4f9b)
+
+![image](https://github.com/user-attachments/assets/32fae2d5-d318-4f5e-a020-267d3e2a7345)
+
+
+Yes, the server name (`d78e390cba08`) and IP (`172.19.0.4`) you're seeing are **Docker container details**, not your local machine's hostname or IP. This is expected behavior when running inside Docker.
+
+### Why You See Docker Container Details:
+1. **`hostname`** inside a Docker container returns the container ID (like `d78e390cba08`).
+2. **`socket.gethostbyname()`** returns the container's internal Docker network IP (`172.19.0.4`), not your machine's LAN/WAN IP.
+
+---
+
+### How to Validate if This is a Docker IP:
+Run these commands to check:
+
+#### 1. **List all Docker networks and containers:**
+```bash
+docker network inspect expense-tracker-net
+```
+This will show all containers (`frontend`, `backend`, `expense-db`) and their assigned IPs (like `172.19.0.4`).
+
+#### 2. **Check your container's IP directly:**
+```bash
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' frontend
+```
+This should return `172.19.0.4` (or similar).
+
+#### 3. **Ping the IP from your host machine:**
+```bash
+ping 172.19.0.4
+```
+If it responds, it confirms the IP belongs to a Docker container.
+
+---
+
+### If You Want to Show Your Local Machine's IP Instead:
+Modify `get_server_info()` in `frontend/app.py` to use your host IP:
+
+#### Option 1: Get LAN IP (Recommended)
+```python
+def get_server_info():
+    hostname = socket.gethostname()
+    # Get LAN IP (works on Linux/macOS/Windows)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Doesn't need to be reachable
+        s.connect(('10.255.255.255', 1))
+        ip_address = s.getsockname()[0]
+    except Exception:
+        ip_address = socket.gethostbyname(hostname)
+    finally:
+        s.close()
+    return {
+        'hostname': hostname,
+        'ip_address': ip_address
+    }
+```
+
+#### Option 2: Get Public IP (Requires Internet)
+```python
+def get_server_info():
+    hostname = socket.gethostname()
+    try:
+        ip_address = requests.get('https://api.ipify.org').text
+    except:
+        ip_address = "Not available"
+    return {
+        'hostname': hostname,
+        'ip_address': ip_address
+    }
+```
+
+#### Option 3: Show Both Docker and Host IPs
+```python
+def get_server_info():
+    docker_hostname = socket.gethostname()
+    docker_ip = socket.gethostbyname(docker_hostname)
+    
+    # Get host machine LAN IP
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        host_ip = s.getsockname()[0]
+    except Exception:
+        host_ip = "Not available"
+    finally:
+        s.close()
+    
+    return {
+        'docker_hostname': docker_hostname,
+        'docker_ip': docker_ip,
+        'host_ip': host_ip
+    }
+```
+Then update the template to show both:
+```html
+<div class="server-info">
+    <strong>Container:</strong> {{ server_info.docker_hostname }} ({{ server_info.docker_ip }})<br>
+    <strong>Host Machine:</strong> {{ server_info.host_ip }}
+</div>
+```
+
+---
 
 
 ---
@@ -317,4 +425,157 @@ You'll need these essential manifests:
 - Backend accesses RDS via the full RDS endpoint URL from the secret]
 
 #### docker restart $(docker ps -a -q -f status=exited)
+
+
+The error indicates your backend application is failing because it can't connect to the PostgreSQL database. The key error is:
+
+```
+sqlalchemy.exc.ArgumentError: Expected string or URL object, got None
+```
+
+This means the `DATABASE_URL` environment variable is not set in your Kubernetes pod. Let's fix this:
+
+### Solution: Properly Configure the Backend Deployment
+
+1. **First, check your existing database service**:
+```bash
+kubectl get svc expense-db
+```
+(If you don't see it, you'll need to deploy PostgreSQL first)
+
+2. **Create a Kubernetes Secret for database credentials**:
+```bash
+kubectl create secret generic db-credentials \
+  --from-literal=POSTGRES_USER=user \
+  --from-literal=POSTGRES_PASSWORD=pass \
+  --from-literal=POSTGRES_DB=expenses_db
+```
+
+3. **Create a proper deployment YAML** (`backend-deployment.yaml`):
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: your-backend-image
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://user:pass@expense-db:5432/expenses_db"
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: expense-db
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+```
+
+4. **Apply the configuration**:
+```bash
+kubectl apply -f backend-deployment.yaml
+```
+
+### If You Need to Deploy PostgreSQL First:
+
+1. **Create PostgreSQL deployment** (`postgres-deployment.yaml`):
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13-alpine
+        envFrom:
+        - secretRef:
+            name: db-credentials
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+```
+
+2. **Create Persistent Volume Claim** (`postgres-pvc.yaml`):
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+3. **Apply all configurations**:
+```bash
+kubectl apply -f postgres-pvc.yaml
+kubectl apply -f postgres-deployment.yaml
+kubectl apply -f backend-deployment.yaml
+```
+
+### Verify Everything Works:
+
+1. Check pods:
+```bash
+kubectl get pods
+```
+
+2. Check backend logs:
+```bash
+kubectl logs <backend-pod-name>
+```
+
+3. Access your application:
+```bash
+kubectl port-forward svc/backend 8000:8000
+```
+Then visit http://localhost:8000
+
+### Key Points:
+1. The database URL must be accessible from the backend pod
+2. All environment variables must be properly set
+3. The database service must be running before the backend starts
+4. Use `kubectl describe pod <pod-name>` to debug startup issues
+
+Would you like me to:
+1. Show how to add liveness/readiness probes?
+2. Add configuration for the frontend service?
+3. Set up database backups?
 
