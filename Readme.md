@@ -53,8 +53,8 @@ docker build -t devopsdktraining/expense-tracker-app-backend:1 ./backend
 ```bash
 
 docker login
-docker push devopsdktraining/expense-tracker-app-backend:1
-docker push devopsdktraining/expense-tracker-app-frontend:1
+docker push devopsdktraining/expense-tracker-app-backend:2
+docker push devopsdktraining/expense-tracker-app-frontend:2
 
 ```
 
@@ -314,5 +314,7 @@ You'll need these essential manifests:
 - Frontend accesses backend via Kubernetes DNS:
   - Service name `backend` resolves to ClusterIP
   - Port 8000 is the backend service port
-- Backend accesses RDS via the full RDS endpoint URL from the secret
+- Backend accesses RDS via the full RDS endpoint URL from the secret]
+
+#### docker restart $(docker ps -a -q -f status=exited)
 
