@@ -121,7 +121,7 @@ variable "key_name" {
 variable "name_ecr" {
   description = "Name of the ECR repository"
   type        = string
-  default     = "app/expense-tracker-deepak-webapp"
+  default     = "expense-tracker-app"
 }
 variable "enable_immutable_tags" {
   description = "Enable immutable tags for ECR repository"

@@ -1,0 +1,219 @@
+name: Python Expense Tracker CI Pipeline - Backend
+
+on: 
+  workflow_dispatch: # Allows manual triggering of the workflow
+    inputs:
+      APP_NAME:
+        description: 'Name of the application'
+        required: true
+        default: 'expense-tracker-app-backend'
+
+# This workflow is triggered manually and runs the CI pipeline for the Expense Tracker backend.
+
+env:
+  APP_NAME: ${{ inputs.APP_NAME }}               # "expense-tracker-app-backend"
+  VERSION: "1.0.${{ github.run_number }}"
+  ECR_REPO: ${{  vars.ECR_REPO }}                 # "expense-tracker-app/backend"
+  AWS_REGION: ${{  vars.AWS_REGION }} 
+  TRIVY_CACHE_DIR: ".trivycache"
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SONAR_HOST_URL: ${{  vars.SONAR_HOST_URL }}    # Update with your SonarQube server URL
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  build:
+    # runs-on: ubuntu-latest
+    runs-on: self-hosted # Use self-hosted runner for faster execution and specific environment setup
+    steps:
+      # Stage 1: Checkout Code (GitHub Actions equivalent)
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v4
+
+       # Print working directory to verify checkout
+      - name: Show backend directory
+        run: pwd
+        working-directory: ./backend  # Runs command inside 'backend' dir
+      
+      # Stage 2: Python Setup (fixed with directory change)
+      - name: Set up Python
+        uses: actions/setup-python@v4  # Updated to v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'  # Optional: Cache dependencies for faster runs
+
+      # Verify Python version and store in GITHUB_ENV
+      - name: Check Python version
+        working-directory: ./backend
+        run: |
+          python --version
+          echo "PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" >> $GITHUB_ENV
+
+      # Step 3: Install Dependencies
+      - name: Install dependencies
+        working-directory: ./backend  # Key fix: Equivalent to Jenkins' dir('backend')
+        run: |
+          python -m venv venv
+          source venv/bin/activate  # For Linux (use `call venv\Scripts\activate` on Windows)
+          pip install --upgrade pip
+          pip install -r requirements.txt
+     
+      # Step 4: Linting and Testing
+      - name: Lint and Test
+        working-directory: backend
+        run: |
+          source venv/bin/activate
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          pytest app/tests/ -v --cov=app --cov-report=xml --junitxml=app/tests/reports/test-results.xml
+
+      # Step 5: Upload Pytest Results
+      - name: Upload JUnit Test Results
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: backend/app/tests/reports/test-results.xml
+
+      # Step 6: Upload Coverage Report
+      - name: Upload Coverage Report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+    
+      # Step 7: OWASP Dependency Check
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'expense-tracker-backend'
+          path: 'backend'
+          format: 'HTML,JSON'
+          out: 'backend/reports'
+
+      # Step 8: Upload OWASP Report
+      - name: Upload Dependency Check Report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: backend/reports
+    
+      # Step 9: SonarQube Analysis
+      - name: Install SonarScanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+          sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+          echo "/opt/sonar-scanner/bin" >> $GITHUB_PATH
+    
+
+      - name: SonarQube Scan
+        working-directory: backend
+        run: |
+          source venv/bin/activate
+          sonar-scanner \
+            -Dsonar.projectKey=$APP_NAME \
+            -Dsonar.projectName=$APP_NAME \
+            -Dsonar.projectVersion=$VERSION \
+            -Dsonar.sources=app \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.python.coverage.reportPaths=coverage.xml \
+            -Dsonar.python.version=$PYTHON_VERSION
+      
+      # Step 10: Configure AWS Credentials & ECR Login
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      
+      
+      # Step 11: Build Docker Image
+      - name: Build Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPO }}
+          IMAGE_TAG: ${{ env.VERSION }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+    
+      # Step 12: Trivy Vulnerability Scan  
+      - name: Trivy Vulnerability Scan (SARIF output)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      # Upload Trivy Results
+      - name: Upload SARIF file to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # Step 13: Push Docker Image to ECR
+      - name: Push Docker image to ECR
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # Step 14: Trigger CD Pipeline
+      # This step triggers the CD pipeline to deploy the application using the built Docker image.
+        
+      # Success: Print success message
+      - name: ✅ Backend pipeline succeeded
+        if: success()
+        run: echo "✅ Backend CI pipeline succeeded"
+        
+        # Trigger the CD pipeline using GitHub Actions
+      - name: Trigger CD pipeline
+        if: success()
+        uses: actions/github-script@v6
+        env:
+          IMAGE_TAG: ${{ env.VERSION }}
+          ECR_REPO: ${{ env.ECR_REPO }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          APP_NAME: ${{ env.APP_NAME }}
+       
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'cd-tracker-app-backend.yaml',
+              ref: 'main',
+              inputs: {
+                IMAGE_TAG: process.env.IMAGE_TAG,
+                ECR_REPO: process.env.ECR_REPO,
+                AWS_REGION: process.env.AWS_REGION,
+                APP_NAME: process.env.APP_NAME
+              }
+            })
+        
+      - name: Clean up workspace
+        if: always()
+        run: |
+            rm -rf venv
+            rm -rf .pytest_cache
+            rm -rf .coverage
+            rm -rf coverage.xml
+            rm -rf "${{ env.TRIVY_CACHE_DIR }}"
+            find . -type d -name '__pycache__' -exec rm -r {} +
+        
+      # Failure: Print failure message
+      - name: ❌ Backend pipeline failed
+        if: failure()
+        run: echo "❌ Backend CI pipeline failed"
+
+
+
