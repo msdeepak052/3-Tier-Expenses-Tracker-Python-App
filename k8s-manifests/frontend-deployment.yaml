@@ -19,11 +19,11 @@ spec:
         - containerPort: 5000
         env:
         - name: API_URL
-          value: "http://backend:8000"
+          value: "http://backend.tracker-app.svc.cluster.local:8000"  # Backend Connectivity URL
         resources:
           requests:
-            cpu: "100m"
-            memory: "128Mi"
+            cpu: "200m"
+            memory: "256Mi"
           limits:
             cpu: "500m"
             memory: "512Mi"
