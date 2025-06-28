@@ -2,13 +2,12 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: tracker-app  # Deploy in the same namespace as frontend
+  namespace: tracker-app                 # Deploy in the same namespace as frontend
 spec:
-  type: ClusterIP  # Explicitly declare (default, but recommended)
+  type: ClusterIP                         # Explicitly declare (default, but recommended)
   selector:
-    app: backend  # Matches labels of your backend Pods
+    app: backend                          # Matches labels of your backend Pods
   ports:
     - protocol: TCP
-      port: 8000  # Service port (used in API_URL)
-      targetPort: 8000  # Pod port (where your backend app listens)
-  sessionAffinity: ClientIP  # Enables session persistence
+      port: 8000                           # Service port (used in API_URL)
+      targetPort: 8000                     # Pod port (where your backend app listens)
