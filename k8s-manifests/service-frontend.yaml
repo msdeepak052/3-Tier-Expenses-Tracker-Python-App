@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: tracker-app                                    # Align with your namespace
+spec:
+  type: ClusterIP                                        # Exposes externally (cloud providers assign external IP)
+  selector:
+    app: frontend                                            # Matches your frontend Deployment's Pod labels
+  ports:
+    - protocol: TCP
+      port: 80                                              # External port (HTTP)
+      targetPort: 5000                                        # Matches containerPort in your frontend Deployment
+  sessionAffinity: ClientIP                                   # Session persistence (optional for stateful apps)
